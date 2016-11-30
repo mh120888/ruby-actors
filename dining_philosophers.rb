@@ -1,3 +1,5 @@
+require 'celluloid'
+
 class Chopstick
   def initialize
     @mutex = Mutex.new
@@ -39,45 +41,40 @@ class Table
   end
 end
 
-class Waiter
-  def initialize(capacity)
-    @capacity = capacity
-    @mutex    = Mutex.new
-  end
-
-  def serve(table, philosopher)
-    @mutex.synchronize do
-      sleep(rand) while table.chopsticks_in_use >= @capacity
-      philosopher.take_chopsticks
-    end
-
-    philosopher.eat
-  end
-end
-
 class Philosopher
+  include Celluloid
+
   def initialize(name)
     @name = name
   end
 
   def dine(table, position, waiter)
+    @waiter = waiter
+
     @left_chopstick  = table.left_chopstick_at(position)
     @right_chopstick = table.right_chopstick_at(position)
 
-    loop do
-      think
-      waiter.serve(table, self)
-    end
+    think
   end
 
   def think
     puts "#{@name} is thinking"
+    sleep(rand)
+
+    @waiter.async.request_to_eat(Actor.current)
   end
 
   def eat
+    take_chopsticks
+
     puts "#{@name} is eating."
+    sleep(rand)
 
     drop_chopsticks
+
+    @waiter.async.done_eating(Actor.current)
+
+    think
   end
 
   def take_chopsticks
@@ -89,9 +86,30 @@ class Philosopher
     @left_chopstick.drop
     @right_chopstick.drop
   end
+
+  def finalize
+    drop_chopsticks
+  end
 end
 
+class Waiter
+  include Celluloid
 
+  def initialize(capacity)
+    @eating = []
+  end
+
+  def request_to_eat(philosopher)
+    return if @eating.include?(philosopher)
+
+    @eating << philosopher
+    philosopher.async.eat
+  end
+
+  def done_eating(philosopher)
+    @eating.delete(philosopher)
+  end
+end
 
 
 names = %w{Heraclitus Aristotle Epictetus Schopenhauer Popper}
@@ -101,9 +119,8 @@ philosophers = names.map { |name| Philosopher.new(name) }
 table = Table.new(philosophers.size)
 waiter = Waiter.new(philosophers.size - 1)
 
-threads = philosophers.map.with_index do |philosopher, i|
-  Thread.new { philosopher.dine(table, i, waiter) }
+philosophers.each_with_index do |philosopher, i|
+  philosopher.async.dine(table, i, waiter)
 end
 
-threads.each(&:join)
 sleep
