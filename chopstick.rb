@@ -1,20 +1,21 @@
+require_relative 'actor'
+
 class Chopstick
+  include Actor
+
   def initialize
-    @mutex = Mutex.new
+    @taken = false
   end
 
   def take
-    @mutex.lock
+    @taken = true
   end
 
   def drop
-    @mutex.unlock
-
-  rescue ThreadError
-    puts "Trying to drop a chopstick not acquired"
+    @taken = false
   end
 
   def in_use?
-    @mutex.locked?
+    @taken
   end
 end

@@ -37,13 +37,13 @@ class Philosopher
   end
 
   def take_chopsticks
-    @left_chopstick.take
-    @right_chopstick.take
+    @left_chopstick.async.take
+    @right_chopstick.async.take
   end
 
   def drop_chopsticks
-    @left_chopstick.drop
-    @right_chopstick.drop
+    @left_chopstick.async.drop
+    @right_chopstick.async.drop
   end
 
   def finalize
